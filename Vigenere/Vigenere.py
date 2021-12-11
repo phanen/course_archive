@@ -1,0 +1,130 @@
+import string
+from typing import Optional
+
+std_freq = [0.0788,
+            0.0156,
+            0.0268,
+            0.0389,
+            0.1268,
+            0.0256,
+            0.0187,
+            0.0573,
+            0.0707,
+            0.0010,
+            0.0060,
+            0.0394,
+            0.0244,
+            0.0706,
+            0.0776,
+            0.0186,
+            0.0009,
+            0.0594,
+            0.0634,
+            0.0978,
+            0.0280,
+            0.0102,
+            0.0214,
+            0.0016,
+            0.0202,
+            0.0006]
+
+
+def cipher_slice(cipher, m) -> list:
+    """将密文字符串分为多组, 字符索引模m同余的为一组"""
+    cipher_lst = []
+    for i in range(m):
+        cipher_lst.append(cipher[i::m])
+    return cipher_lst
+
+
+def freq_calc(s: str) -> dict:
+    """统计字符串中各字母频数"""
+    freq_dict = dict(zip(string.ascii_uppercase, [0] * 26))
+    for c in s:
+        freq_dict[c] += 1
+    return list(freq_dict.values())
+
+
+def ci_calc(s: str) -> float:
+    """计算字符串的重合指数"""
+    # 统计各个字符的频数
+    freq = freq_calc(s)
+    # 计算重合指数
+    l = len(s)
+    a = l * l - l
+    b = 0
+    for v in freq:
+        b += v * v - v
+    return b / a
+
+
+def get_key_length(cipher: str, lbound=100) -> Optional[int]:
+    """获取密钥长度"""
+    for m in range(1, lbound):
+        # 分 m 组
+        cipher_lst = cipher_slice(cipher, m)
+
+        # 计算各个组平均ci值
+        n = len(cipher_lst)
+        a = 0
+        for s in cipher_lst:
+            a += ci_calc(s)
+        avg_ci = a / n
+
+        # 找到第一个平均重合指数足够接近0.065的分组方式
+        if abs(avg_ci - 0.065) < 0.01:
+            return m
+    return None
+
+
+def caesar_get_key(s: str) -> int:
+    """移位密码破解"""
+    # 密文的字母频数
+    freq = freq_calc(s)
+    # 密文分别左移 0-25 次
+    max_a = 0  # 记录最大拟合度
+    left_move = 0  # 记录最大拟合度对应的移位数
+    for k in range(26):
+        # 该组左移 k 位后的频数(相当于freq循环右移 k 位)
+        k_left_freq = freq[-k:] + freq[0:-k]
+        a = 0
+        for p, q in zip(k_left_freq, std_freq):
+            a += p * q
+        # 取拟合度最高的
+        if a > max_a:
+            max_a = a
+            left_move = k
+    # 原文右移 left_move 位得到密文
+    # 密文左移 left_move 位得到原文
+    return left_move
+
+
+def get_key(cipher: str) -> list:
+    key_length = get_key_length(cipher)
+    cipher_lst = cipher_slice(cipher, key_length)
+    key = []
+    for sub_cipher in cipher_lst:
+        key.append(caesar_get_key(sub_cipher))
+    return key
+
+
+def decrypt(cipher, key) -> str:
+    """解密"""
+    plain = []
+    n = len(key)
+    for i, c in enumerate(cipher):
+        plain.append(
+            string.ascii_uppercase[(ord(c) - ord("A") - key[i % n])]
+        )
+    return "".join(plain)
+
+
+if __name__ == '__main__':
+    with open("cipher2.txt", "r") as f:
+        cipher = f.read()
+    # 获取密钥
+    # key_str = "".join([string.ascii_uppercase[i] for i in get_key(cipher)])
+    # print(key_str)
+    key_lst = get_key(cipher)
+    plain = decrypt(cipher, key_lst)
+    print(plain)
