@@ -1,6 +1,7 @@
 import string
 from typing import Optional
 
+# 有意义的英文频度序列
 std_freq = [0.0788,
             0.0156,
             0.0268,
@@ -37,7 +38,7 @@ def cipher_slice(cipher, m) -> list:
     return cipher_lst
 
 
-def freq_calc(s: str) -> dict:
+def freq_calc(s: str) -> list[int]:
     """统计字符串中各字母频数"""
     freq_dict = dict(zip(string.ascii_uppercase, [0] * 26))
     for c in s:
@@ -83,29 +84,28 @@ def caesar_get_key(s: str) -> int:
     freq = freq_calc(s)
     # 密文分别左移 0-25 次
     max_a = 0  # 记录最大拟合度
-    left_move = 0  # 记录最大拟合度对应的移位数
+    key = 0  # 记录最大拟合度对应的移位数
     for k in range(26):
-        # 该组左移 k 位后的频数(相当于freq循环右移 k 位)
-        k_left_freq = freq[-k:] + freq[0:-k]
+        # 密文左移 k 位后的频数(相当于freq循环左移 k 位)
+        k_left_freq = freq[k:] + freq[0:k]
         a = 0
         for p, q in zip(k_left_freq, std_freq):
             a += p * q
-        # 取拟合度最高的
+        # 取 与有意义英文分布 拟合度最高的移位数
         if a > max_a:
             max_a = a
-            left_move = k
-    # 原文右移 left_move 位得到密文
-    # 密文左移 left_move 位得到原文
-    return left_move
+            key = k
+    # 密文左移 key 位得到原文 (原文右移 key 位得到密文) 所以key就是密钥
+    return key
 
 
 def get_key(cipher: str) -> list:
     key_length = get_key_length(cipher)
     cipher_lst = cipher_slice(cipher, key_length)
-    key = []
+    key_lst = []
     for sub_cipher in cipher_lst:
-        key.append(caesar_get_key(sub_cipher))
-    return key
+        key_lst.append(caesar_get_key(sub_cipher))
+    return key_lst
 
 
 def decrypt(cipher, key) -> str:
@@ -114,17 +114,21 @@ def decrypt(cipher, key) -> str:
     n = len(key)
     for i, c in enumerate(cipher):
         plain.append(
-            string.ascii_uppercase[(ord(c) - ord("A") - key[i % n])]
+            string.ascii_uppercase[(ord(c) - ord("A") - key[i % n]) % 26]
         )
     return "".join(plain)
 
 
 if __name__ == '__main__':
-    with open("cipher2.txt", "r") as f:
+    with open("cipher.txt", "r") as f:
         cipher = f.read()
+
     # 获取密钥
-    # key_str = "".join([string.ascii_uppercase[i] for i in get_key(cipher)])
-    # print(key_str)
     key_lst = get_key(cipher)
+    # print(len(key_lst))
+    # 获取明文
     plain = decrypt(cipher, key_lst)
-    print(plain)
+    # print(plain)
+
+    with open("plain.txt", "w") as f:
+        f.write(plain)
