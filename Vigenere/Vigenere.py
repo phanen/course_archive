@@ -1,5 +1,6 @@
 import string
 from typing import Optional
+import pprint as p
 
 # 有意义的英文频度序列
 std_freq = [0.0788,
@@ -68,8 +69,8 @@ def get_key_length(cipher: str, lbound=100) -> Optional[int]:
         # 计算各个组平均ci值
         n = len(cipher_lst)
         a = 0
-        for s in cipher_lst:
-            a += ci_calc(s)
+        for sub_cipher in cipher_lst:
+            a += ci_calc(sub_cipher)
         avg_ci = a / n
 
         # 找到第一个平均重合指数足够接近0.065的分组方式
@@ -119,16 +120,34 @@ def decrypt(cipher, key) -> str:
     return "".join(plain)
 
 
+def main():
+    meaningful = []
+    for file_num in range(10):
+        print(f"------------------------Ciphertext{file_num}------------------------")
+        with open(f".\cipher_pkg\Ciphertext{file_num}.out", "r") as f:
+            cipher = f.read()
+        # 获取密钥
+        key_lst = get_key(cipher)
+        # 获取明文
+        plain = decrypt(cipher, key_lst)
+        with open(f".\plain_pkg\plain{file_num}.out", "w") as f:
+            f.write(plain)
+
+        # 对密钥再解密
+        key = "".join([string.ascii_uppercase[i] for i in key_lst])
+        key2key = caesar_get_key(key)
+        plain2key = "".join([string.ascii_uppercase[i]
+                             for i in [(ord(c) - ord("A") - key2key) for c in key]])
+
+        # 打印
+        print("密钥长", len(key_lst))
+        print("密钥", key)
+        print("明文", plain)
+        print(f"密钥左移{key2key}位", plain2key)
+        meaningful.append(plain2key)
+    print(f"----------------------------------------------------------------------")
+    p.pprint(meaningful)
+
+
 if __name__ == '__main__':
-    with open("cipher.txt", "r") as f:
-        cipher = f.read()
-
-    # 获取密钥
-    key_lst = get_key(cipher)
-    # print(len(key_lst))
-    # 获取明文
-    plain = decrypt(cipher, key_lst)
-    # print(plain)
-
-    with open("plain.txt", "w") as f:
-        f.write(plain)
+    main()
