@@ -1,3 +1,5 @@
-# py_script
-一些python脚本
+# introduction
+Some python script for Programming assignments
+
+
 
