@@ -108,7 +108,6 @@ def attack(prev_cipher: int, cur_cipher: int):
 
 if __name__ == '__main__':
     # decrypt_server(hex((0xddc0f0c4e4d41b2d3b70a1d73fa6d7f5 << 128) | 0x3ac4758c8e179d4a1f1a47978c879205)[2:])
-    # 0xddc0f0c4e4d41b2d3b70a1d73fa6d7f5 << 128
     iv, c1, c2, c3 = (
         0x4e9bd8fb5331702fb4a7ea7e0b9ec337,
         0x0e4ac53f9f569e53ccb0e035f9c8ed4f,
