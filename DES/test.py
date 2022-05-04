@@ -1,33 +1,45 @@
-from Crypto.Cipher import AES
+import time
+
+from Crypto.Cipher import DES
 from Crypto.Util.Padding import pad, unpad
 from Crypto.Random import get_random_bytes
 
 
-def pycryptodome_AES_CBC(data):
-    """pycryptodome库的实现"""
+def main1():
+    key = int("133457799bbcdff1", 16).to_bytes(length=8, byteorder="little")
+    cipher = DES.new(key, DES.MODE_ECB)
+    # 格式化测试集
+    lst = []
+    with open("testbench.txt", "r") as f:
+        for plain_ in f:
+            lst.append(int(plain_).to_bytes(length=8, byteorder="little"))
 
-    def pycryptodome_encrypt(data, key, iv):
-        '''pycryptodome库 的加密'''
-        cipher = AES.new(key, AES.MODE_CBC, iv)
-        encrypted_data = cipher.encrypt(pad(data, AES.block_size))
-        return encrypted_data
+    ret = []
+    t1 = time.time()
+    for plain in lst:
+        ret.append(cipher.encrypt(plain))
 
-    def pycryptodome_decrypt(encrypted_data, key, iv):
-        cipher = AES.new(key, AES.MODE_CBC, iv)
-        tmp = cipher.decrypt(encrypted_data)
-        data = unpad(tmp, AES.block_size)
-        return data
-
-    key = get_random_bytes(16)  # 随机生成16字节（即128位）的加密密钥
-    iv = get_random_bytes(16)
-    print(key)
-    print(iv)
-    encrypted_data = pycryptodome_encrypt(data, key, iv)
-    return pycryptodome_decrypt(encrypted_data, key, iv)
+    # 重新生成测试集
+    # for _ in range(1000):
+    #     cipher.encrypt(get_random_bytes(8))
+    print(f"Time measured: {time.time() - t1}")
+    return ret
 
 
 if __name__ == '__main__':
-    # 测试使用 pycryptodome库实现 AES_CBC 加密解密
-    test_data = b"I am a student from shandongUniversityasdasd"
-    out1 = pycryptodome_AES_CBC(test_data)
-    print(out1)
+    ret = main1()
+    # print(ret)
+
+# def DES_encrypt(data, key):
+#     '''pycryptodome库 的加密'''
+#     cipher = DES.new(key, DES.MODE_ECB)
+#     encrypted_data = cipher.encrypt(pad(data, DES.block_size))
+#     return encrypted_data
+
+# def DES_decrypt(encrypted_data, key):
+#     cipher = DES.new(key, DES.MODE_ECB)
+#     tmp = cipher.decrypt(encrypted_data)
+#     data = unpad(tmp, DES.block_size)
+#     return data
+
+# key = get_random_bytes(8)  # 随机生成16字节（即128位）的加密密钥
