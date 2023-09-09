@@ -698,10 +698,72 @@ DNSSEC: unsigned
 
 
 <!-- 宿主机 archlinux, 方便起见,  vagrant 创建了另一个 archlinux (virualbox 虚拟机), 开启 ssh 映射到宿主机端口 2222, 从而能访问. -->
-
 <!-- vagrant 虚拟机扫描宿主机 -->
 <!-- ![img:lab4-vm](https://i.imgur.com/Ka4o9Wz.png) -->
 <!-- 宿主机扫描 vagrant 虚拟机 -->
 
-## 4.2 主机扫描 2
+使用 virutual box 创建两台 ubuntu 的虚拟机, 网络环境为 netnetwork, 从而使得两台虚拟机均能上网且能够相互使用 nmap 扫描到.
 
+两台虚拟机的 ip 为 10.0.2.5(pc1), 10.0.2.4(pc2)
+![img:lab4-u1](https://i.imgur.com/JB8OGMB.png)
+![img:lab4-u2](https://i.imgur.com/3gc3nzv.png)
+
+pc1 扫描 pc2
+![img:lab4-12](https://i.imgur.com/dVZJhJo.png)
+
+pc2 扫描 pc1:
+![img:lab4-21](https://i.imgur.com/KfoFLU0.png)
+
+均发现 22 号端口的 ssh 服务开放(ubuntu virtulbox 在 natnetwork 环境下默认开启 ssh.socket)
+
+`nmap -v 10.0.2.5`, 加强扫描
+![img:lab4-v](https://i.imgur.com/uB0LOK5.png)
+
+扫描整个子网段
+![img:lab4-sub](https://i.imgur.com/I76yLbt.png)
+
+共 5 个 ip, 分别为: 虚拟网关, 宿主机, 虚拟 DHCP 服务器, 以及两个 ubuntu 虚拟机
+
+## 4.2 主机扫描 2
+- 主机发现, 包括 ARP 主机发现和 NetBIOS 主机发现
+- 端口扫描, 包括 TCP, UDP 端口扫描
+- 熟悉掌握端口扫描工具, 1) SATAN; 2) Nessus; 3) Nmap; 4)X-Scan.
+以 Nmap 为例, 掌握 Nmap 的使用, 实验可按照两人一组的方式进行, 也可设置两台虚拟机进行, 安装 Nmap 工具后, 每个小组成员之间使用 Nmap 工具互相扫描对方的主机, 进行端口扫描和操作系统识别
+
+
+
+arp 主机发现
+```bash
+sudo nmap -sn -PR 10.0.2.*
+```
+![img:lab4-arp-find](https://i.imgur.com/ZjLE5lQ.png)
+
+netbios host find
+```bash
+sudo nmap -sU --script nbstat.nse -p137 10.0.2.* -T4
+```
+![img:lab4-netbios](https://i.imgur.com/K25E71F.png)
+
+tcp, udp 端口扫描
+
+pc1 对 pc2
+![img:lab4-tcp-udp](https://i.imgur.com/nRnRz8t.png)
+
+pc2 对 pc1
+![img:lab4-tcp-udp2](https://i.imgur.com/cT5qnGb.png)
+
+操作系统识别
+![img:lab4-os](https://i.imgur.com/bJ4b75F.png)
+- ip 地址: 10.0.2.4
+- 主机状态: up
+- 延迟 0.00079s
+- 开放端口: 22
+- MAC 地址: 08:00:27:22:07:31
+- 网络距离: 1 hop
+- TCP/IP 指纹
+- 没有检测出具体的 OS 细节(可能因为我全都用的 ubuntu)
+
+> (不过自己扫描自己就能检测出内核
+![img:lab4-kernel](https://i.imgur.com/0zDsMCT.png)
+检测 host
+![img:lab4-host](https://i.imgur.com/1Qvjamf.png)
