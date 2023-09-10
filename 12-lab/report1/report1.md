@@ -1,7 +1,6 @@
 
 # lab 2: 密码学基础知识
 
-
 ## 2.1 秘密共享协议实验
 - 编程实现 Shamir 秘密共享协议, 并调试通过.
 - 利用 Shamir 秘密共享协议对某一数据文件进行单次分享和重构操作.
@@ -529,10 +528,367 @@ int main() {
 ![img:lab2-vss](https://i.imgur.com/JEo1cf6.png)
 
 
-## 2.3
+## 2.3 不经意伪随机函数  OPRF 与隐私集合求交  PSI  协议实验
+- 编程实现不经意伪随机函数 OPRF(如基于RSA 的OPRF, 基于DH 的OPRF, 基于OT 的OPRF 等)与隐私集合求交 PSI (如基于Bloom Filter 的PSI, 基于 OPE 的PSI, 基于OT 的PSI 等)协议, 并调试通过
+- 利用不经意伪随机函数 OPRF 与隐私集合求交 PSI 协议, 对某一数据文件进行单次进行不泄漏消息的哈希运算和集合求交操作
+- 界面简洁, 友好, 便于操作
 
-## 2.4
+### oprf
 
+双方共同计算一个 PRF, 一方提供输入, 另一方提供 PRF, 结束后只有输入方获知输出结果.
+- Alice 选一个随机数 r, 计算 x = H(M) * r^d, 发送给 Bob
+- Bob 计算 y = x^e mod N, 发送给 Alice
+- Alice 计算 H(M) = y * r^(-q) mod N
+
+代码实现
+```python
+from cryptography.hazmat.primitives.asymmetric import rsa
+import hashlib
+import random
+
+
+def mod_inverse(a, m):  # return a_inverse = a^{-1} mod m
+    m0, x0, x1 = m, 0, 1
+    while a > 1:
+        q = a // m
+        m, a = a % m, m
+        x0, x1 = x1 - q * x0, x0
+    return x1 + m0 if x1 < 0 else x1
+
+
+# Generate RSA keys for Server
+server_private_key = rsa.generate_private_key(
+    public_exponent=65537,  # Choose the public exponent
+    key_size=2048,  # Choose the key size (e.g., 2048 or 4096)
+)
+
+# Extract Server's public key
+server_public_key = server_private_key.public_key()
+
+# Server's RSA parameters
+N = server_private_key.private_numbers().public_numbers.n  # Modulus
+# p = server_private_key.private_numbers().p    # Prime Factor 1
+# q = server_private_key.private_numbers().q    # Prime Factor 2
+e = server_private_key.private_numbers().public_numbers.e  # Public Exponent
+d = server_private_key.private_numbers().d  # Private Exponent
+print("Server's RSA Parameters:")
+
+# Client's input
+M = b"Hello, Crypto!"
+
+# Step 1: Client selects a random number r from Z_N*
+r = random.randint(1, N - 1)
+
+# Step 2: Client calculates x = H(M) * r^d mod N
+h = hashlib.sha256(M).digest()  # Calculate the hash of the input message M
+h_int = int.from_bytes(h, byteorder="big")  # Convert the hash to an integer
+x = (h_int * pow(r, e, N)) % N
+
+# Step 3: Client sends x to Server(We ignore it here)
+
+# Step 4: Server calculates y = x^e mod N
+y = pow(x, d, N)
+
+# Step 5: Server sends y to Client(We ignore it here)
+
+# Step 6: Client calculates z = y * r^(-1) mod N
+# Calculate the modular multiplicative inverse of r
+r_inverse = mod_inverse(r, N)
+z = (y * r_inverse) % N
+
+# Client now has the final result z as the OPRF output
+print("Client's OPRF Output:", z % N)
+print("PRF    H(M)^d mod N = ", pow(h_int, d, N))
+```
+
+![oprf](https://i.imgur.com/UJBh6LI.png)
+
+### psi
+
+bloomfilter 是一种概率容器, 能够高效存储一个集合, 基本原理是将每个元素取多个哈希插入到位图中, 如果 hash 函数足够好, 就能以可忽略的误差判断一个元素是否存在于容器中.
+> 关于 **intersection** of set 的原理简介
+> - $a = b \in S1 ∩ S2$
+> - $a \in S1 − (S1 ∩ S2),\ b \in  S2 −(S1 ∩S2)$
+
+bloomfilter 作 PSI 的代码
+```py
+from pybloom_live import BloomFilter
+
+# Create sets for two participants
+alice_set = set([1, 2, 3, 4, 5])
+bob_set = set([3, 4, 5, 6, 7])
+
+print("alice_set", alice_set)
+print("bob_set", bob_set)
+
+# Create a Bloom Filter and add Alice's set elements
+bloom_filter = BloomFilter(capacity=1000, error_rate=0.001)
+for item in alice_set:
+    bloom_filter.add(item)
+
+# Initialize the intersection set
+intersection = set()
+
+# Check if Bob's elements exist in the Bloom Filter
+for item in bob_set:
+    if item in bloom_filter:
+        intersection.add(item)
+
+print("Intersection: ", intersection)
+```
+
+![bloom](https://i.imgur.com/hUBSEHK.png)
+
+### V-OPRF
+
+在 oprf 基础上加入承诺机制, 从而使得提供输入方确信输出是由协商好的 PRF 正确计算得到的.
+
+```py
+import hashlib
+from random import randint
+
+
+class Point:
+    def __init__(self, x=0, y=0, z=0):
+        self.x = x
+        self.y = y
+        self.z = z
+
+
+class CurveFp:
+    def __init__(self, A, B, P, N, Gx, Gy):
+        self.A = A
+        self.B = B
+        self.P = P
+        self.N = N
+        self.G = Point(Gx, Gy)  # G(Gx,Gy,0)
+
+
+# y²=x³+7 %p    p=2^256-2^32-7 ,  模数为F_P ,  素数阶为  N , Gx,Gy 为基点的坐标
+secp256k1 = CurveFp(
+    A=0x0,
+    B=0x7,
+    P=0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEFFFFFC2F,
+    N=0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141,
+    Gx=0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798,
+    # x^3+7%p=0
+    Gy=0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8,
+    # y^2%p=0
+)
+
+A = 0x0
+P = secp256k1.P
+N = secp256k1.N
+G = secp256k1.G
+
+
+class Math:
+    @classmethod
+    def multiply(cls, p, n):
+        global A, N, P
+        return cls._fromJacobian(cls._jacobianMultiply(cls._toJacobian(p), n))
+
+    @classmethod
+    def add(cls, p, q):
+        global A, N, P
+        return cls._fromJacobian(
+            cls._jacobianAdd(cls._toJacobian(p), cls._toJacobian(q))
+        )
+
+    @classmethod
+    def inv(cls, x, n):
+        if x == 0:
+            return 0
+
+        lm, hm = 1, 0
+        low, high = x % n, n
+        while low > 1:
+            r = high // low
+            nm, new = hm - lm * r, high - low * r
+            lm, low, hm, high = nm, new, lm, low
+        return lm % n
+
+    @classmethod
+    def _toJacobian(cls, p):  # Jacobian coordinates
+        return Point(p.x, p.y, 1)
+
+    @classmethod
+    def _fromJacobian(cls, p):
+        global P
+        z = cls.inv(p.z, P)
+        return Point((p.x * z**2) % P, (p.y * z**3) % P)
+
+    @classmethod
+    def _jacobianDouble(cls, p):
+        global A, P
+        if not p.y:
+            return Point(0, 0, 0)
+        ysq = (p.y**2) % P
+        S = (4 * p.x * ysq) % P
+        M = (3 * p.x**2 + A * p.z**4) % P
+        nx = (M**2 - 2 * S) % P
+        ny = (M * (S - nx) - 8 * ysq**2) % P
+        nz = (2 * p.y * p.z) % P
+        return Point(nx, ny, nz)
+
+    @classmethod
+    def _jacobianAdd(cls, p, q):
+        global A, P
+        if not p.y:
+            return q
+        if not q.y:
+            return p
+
+        U1 = (p.x * q.z**2) % P
+        U2 = (q.x * p.z**2) % P
+        S1 = (p.y * q.z**3) % P
+        S2 = (q.y * p.z**3) % P
+
+        if U1 == U2:
+            if S1 != S2:
+                return Point(0, 0, 1)
+            return cls._jacobianDouble(p)
+
+        H = U2 - U1
+        R = S2 - S1
+        H2 = (H * H) % P
+        H3 = (H * H2) % P
+        U1H2 = (U1 * H2) % P
+        nx = (R**2 - H3 - 2 * U1H2) % P
+        ny = (R * (U1H2 - nx) - S1 * H3) % P
+        nz = (H * p.z * q.z) % P
+
+        return Point(nx, ny, nz)
+
+    @classmethod
+    def _jacobianMultiply(cls, p, n):  # 雅可比乘法
+        global A, P, N
+        if p.y == 0 or n == 0:
+            return Point(0, 0, 1)
+        if n == 1:
+            return p
+        if n < 0 or n >= N:
+            return cls._jacobianMultiply(p, n % N)
+        if (n % 2) == 0:
+            return cls._jacobianDouble(cls._jacobianMultiply(p, n // 2))
+        # (n % 2) == 1:
+        return cls._jacobianAdd(
+            cls._jacobianDouble(cls._jacobianMultiply(p, n // 2)), p
+        )
+
+
+class PublicKey:
+    def __init__(self, point, curve):
+        self.point = point
+        self.curve = curve
+
+
+class PrivateKey:
+    def __init__(self, curve=secp256k1, secret=None):
+        self.curve = curve
+        self.secret = secret or randint(1, curve.N - 1)
+
+    def publicKey(self):
+        curve = self.curve
+        publicPoint = Math.multiply(curve.G, self.secret)
+        return PublicKey(publicPoint, curve)
+
+
+class VOPRF:
+    def __init__(self, privateKey, publicKey):
+        self.privateKey = privateKey
+        self.publicKey = publicKey or privateKey.publicKey()
+
+    def H1(self, x):
+        curve = self.privateKey.curve
+        return Math.multiply(curve.G, t)
+
+    def H2(self, T_tilde, f_k, A, B):
+        curve = self.privateKey.curve
+        pk = self.publicKey.point
+        data = bytes(
+            str(curve.G.x)
+            + str(curve.G.y)
+            + str(pk.x)
+            + str(pk.y)
+            + str(T_tilde.x)
+            + str(T_tilde.y)
+            + str(f_k.x)
+            + str(f_k.y)
+            + str(A.x)
+            + str(A.y)
+            + str(B.x)
+            + str(B.y),
+            "utf-8",
+        )
+        hash_value = hashlib.sha256(data).digest()
+        mapped_value = int.from_bytes(hash_value, "big") % curve.N
+        return mapped_value
+
+    def blind(self, t):
+        curve = self.privateKey.curve
+        T = self.H1(t)
+        r = randint(1, curve.N - 1)
+        T_tilde = Math.multiply(T, r)
+        return T_tilde, r
+
+    def sign(self, T_tilde):
+        f_k = Math.multiply(T_tilde, self.privateKey.secret)
+        return f_k
+
+    def proof(self, T_tilde, f_k):
+        curve = self.privateKey.curve
+        t = randint(1, curve.N - 1)
+        A1 = Math.multiply(curve.G, t)
+        B1 = Math.multiply(T_tilde, t)
+        c = self.H2(T_tilde, f_k, A1, B1)
+        s = (t - c * self.privateKey.secret) % curve.N
+        return c, s
+
+    def unblind(self, f_k, r):
+        curve = self.privateKey.curve
+        r_inverse = Math.inv(r, curve.N)
+        Tk = Math.multiply(f_k, r_inverse)
+        return Tk
+
+    def verify(self, T_tilde, f_k, s, c):
+        curve = self.privateKey.curve
+        pk = self.publicKey.point
+        A2 = Math.add(Math.multiply(curve.G, s), Math.multiply(pk, c))
+        B2 = Math.add(Math.multiply(T_tilde, s), Math.multiply(f_k, c))
+        c1 = self.H2(T_tilde, f_k, A2, B2)
+        return c1
+
+
+privateKey = PrivateKey()
+voprf = VOPRF(privateKey, privateKey.publicKey())
+
+# Client
+t = randint(1, secp256k1.N - 1)
+T_tilde, r = voprf.blind(t)
+
+# send T_tilde to Server
+
+# Server
+f_k = voprf.sign(T_tilde)
+c1, s = voprf.proof(T_tilde, f_k)
+print("c1 ", c1)
+# print("s ",s)
+
+# send f_k to Client
+
+# Client
+c2 = voprf.verify(T_tilde, f_k, s, c1)
+token = voprf.unblind(f_k, r)
+print("c2 ", c2)
+if c1 == c2:
+    token = voprf.unblind(f_k, r)
+    print("VOPRF verification successful")
+    print("({}, {})".format(token.x, token.y))
+else:
+    print("VOPRF verification failed")
+```
+![voprf](https://i.imgur.com/hHPxHi7.png)
 
 # lab3: 网络侦查技术
 
